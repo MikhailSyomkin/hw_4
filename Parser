@@ -1,0 +1,98 @@
+from tqdm.notebook import tqdm 
+import csv
+anime_dict = dict()
+
+def fulfillingthedicts(k):
+    column = k[0].strip(':')
+    value = k[1].strip()
+    if (value[0].isdigit()) and (column != 'Duration') and (column != 'Episodes') and (column != 'Score') and (column != 'Popularity'):
+        try:
+            value = value.split(',')
+            howmany = ''
+            for i in value:
+                howmany += i
+            value = int(howmany)
+            return([column, value])
+        except: return([column, 'NaN'])
+    if column == 'Genres':
+        try:
+            value_list = []
+            for i in value.split(',     '):
+                value_list.append(i[:(len(i)//2)])
+            return([column, value_list])
+        except: return([column, 'NaN'])
+    if column == 'Episodes':
+        try: return([column, value])
+        except: return([column, 'NaN'])
+    if column == 'Score':
+        try: return([column, float(value)])
+        except: return([column, 'NaN'])
+    else:
+        try: return([column, value])
+        except: return([column, 'NaN'])
+
+def anime(url):
+    time.sleep(random.randint(3,6))
+    responce = requests.get(url,headers={'User-Agent': UserAgent().chrome})
+    soup_main = BeautifulSoup(responce.content, 'html.parser')
+    anime_list = soup_main.find_all('tr', {'class' : 'ranking-list'})
+    for anime in tqdm(anime_list):
+        link = anime.find('a', {'class' : 'hoverinfo_trigger fl-l ml12 mr8'}).get('href')
+        link = link + '/stats'
+        try: responce1 = requests.get(link,headers={'User-Agent': UserAgent().chrome})
+        except: continue
+        soup_anime = BeautifulSoup(responce1.content, 'html.parser')
+        tree = soup_anime
+        name = tree.find('p', {'class' : 'title-english title-inherit'})
+        try: name = name.get_text()
+        except:
+            try:
+                name = tree.html.head.title.get_text().strip()
+                name = name[:-17].strip()
+            except: continue
+        left = soup_anime.find('td', {'class' : 'borderClass'})
+        infa_left = left.find_all('div')
+        main = soup_anime.find('div', {'class' : 'js-scrollfix-bottom-rel'})
+        infa_main_summary = main.find_all('div', {'class' : 'spaceit_pad'})
+        data = {}
+
+        for k in list(infa_left[i].get_text().strip().split('\n') for i in range(len(infa_left))):
+            if k[0] == 'Score:':
+                k = ['Score', k[1].strip()[:4]]
+            if (len(k) == 2) and (k[0] != 'Producers:') and (k[0] != 'Licensors:') and (k[0] != 'Source:') and (k[0] != '1') and (k[0] != '2'):
+                content = fulfillingthedicts(k)
+                try:
+                    data[content[0].lower()] = content[1]
+                except: pass
+
+        cnt = 10
+        for k in list(infa_main_summary[i].get_text().strip().split(': ') for i in range(len(infa_main_summary))):
+            if k[0][-1] == ')':
+                k = k[0].split()
+                k[0] = str(cnt)
+                cnt -= 1
+                k[1] = k[1][1:]
+                k = [k[0], k[1]]
+            content = fulfillingthedicts(k)
+            try:
+                data[content[0].lower()] = content[1]
+            except: continue
+        anime_dict[name] = data
+        try: 
+            anime_dict[name]['episodes'] = int(anime_dict[name]['episodes'])
+        except: pass
+        try: 
+            anime_dict[name]['popularity'] = int(anime_dict[name]['popularity'][1:])
+        except: pass
+            
+url = 'https://myanimelist.net/topanime.php?limit=50'
+
+anime(url)
+
+for i in tqdm(range(1, 1050 // 50)): #сюда на место второго аргумента *количество аниме* // 50
+    url = 'https://myanimelist.net/topanime.php?limit=' + str(i * 50)
+    anime(url)
+
+df = pd.DataFrame.from_dict(anime_dict)
+df_new = df.T
+df_new.to_csv(r'/https://github.com/MikhailSyomkin/hw_4/Anime.csv')
